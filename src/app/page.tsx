@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { storage, db } from '../lib/firebase'; // firebase.ts 경로 확인
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { collection, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 
@@ -40,7 +40,7 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const storageRef = ref(storage, `photos/${fileName}`);
 
         // 업로드 후 결과 반환
-        const snapshot = await uploadBytesResumable(storageRef, compressedFile);
+        const snapshot = await uploadBytes(storageRef, compressedFile);
         const url = await getDownloadURL(snapshot.ref);
 
         // Firestore에 저장하고 그 결과(문서 참조값)를 받음
@@ -50,7 +50,7 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
           fileName: file.name // 원본 파일명도 저장하면 확인하기 좋습니다
         };
 
-        const docRef = await addDoc(collection(db, "photos"), docData);
+        const docRef = addDoc(collection(db, "photos"), docData);
 
         console.log("docRef에 뭐가 들었나",docRef)
         
