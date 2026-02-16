@@ -1,0 +1,236 @@
+/* ===============================
+   전체 배경 (모바일 최적화)
+================================ */
+.container {
+  padding: 30px 16px 50px;
+  text-align: center;
+  min-height: 100vh;
+  background: #fdfbfb;
+  background-image: linear-gradient(120deg, #fff1eb 0%, #f8fbff 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ===============================
+   상단 카드 영역
+================================ */
+.headerSection {
+  background: white;
+  border-radius: 20px;
+  padding: 30px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* 형광색 제거 */
+  margin-bottom: 24px;
+  border: 1px solid #f0f0f0;
+}
+
+/* 메인 타이틀 (가독성 개선) */
+.mainTitle {
+  font-size: 24px;
+  margin-bottom: 12px;
+  color: #444; /* 선명하고 차분한 색상 */
+  font-weight: bold;
+  letter-spacing: -0.5px;
+}
+
+.subTitle {
+  font-size: 18px;
+  margin-bottom: 12px;
+  color: #666;
+}
+
+.description {
+  font-size: 14px;
+  color: #888;
+  line-height: 1.6;
+}
+
+/* ===============================
+   업로드 버튼
+================================ */
+.uploadLabel {
+  display: inline-block;
+  padding: 16px 36px;
+  border-radius: 50px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(90deg, #ff9ac8, #9ed8ff);
+  box-shadow: 0 4px 15px rgba(255, 154, 200, 0.3);
+  transition: 0.25s;
+}
+
+.uploadLabel:active {
+  transform: scale(0.96);
+}
+
+/* ===============================
+   사진 그리드 (모바일 3열)
+================================ */
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.photoItem {
+  overflow: hidden;
+  aspect-ratio: 1/1;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.photoItem img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ===============================
+   업로드 진행 모달 (형광 제거 및 기존 UI 유지)
+================================ */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5); /* 차분한 반투명 */
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.modal {
+  background: white;
+  padding: 35px 30px;
+  border-radius: 20px;
+  text-align: center;
+  width: 85%;
+  max-width: 320px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); /* 부드러운 그림자 */
+}
+
+/* 로딩 스피너 (기존 스타일) */
+.spinnerWrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #eee;
+  border-top: 4px solid #ff9ac8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.statusText {
+  font-weight: bold;
+  font-size: 16px;
+  color: #555;
+}
+
+/* ===============================
+   성공 화면 및 버튼
+================================ */
+.successTitle {
+  color: #ff9ac8;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 5px;
+}
+
+.successDesc {
+  font-size: 16px;         /* 크기를 키워 시인성 확보 */
+  color: #555;            /* 흐릿한 색상에서 진한 회색으로 변경 */
+  line-height: 1.6;       /* 줄 간격 확보 */
+  margin-bottom: 5px;
+  word-break: keep-all;   /* 단어 단위 줄바꿈으로 깔끔하게 */
+  font-weight: 500;       /* 약간의 두께감 추가 */
+}
+
+.successIcon {
+  font-size: 48px;
+  display: block;
+}
+
+.confirmButton {
+  background: linear-gradient(90deg, #ff9ac8, #9ed8ff);
+  color: white;
+  border: none;
+  padding: 14px;
+  border-radius: 30px;
+  font-weight: bold;
+  width: 100%;
+  cursor: pointer;
+  margin-top: 15px;
+}
+
+/* ===============================
+   이미지 확대 모달 (모바일 수정)
+================================ */
+.imageModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.95); /* 배경 더 어둡게 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* 다른 어떤 요소보다 위에 */
+  cursor: pointer;
+  padding: 20px;
+}
+
+/* 확대 이미지 */
+.imageModal img {
+  max-width: 100%;
+  max-height: 80%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* 닫기 버튼 */
+.modalClose {
+  position: absolute;
+  top: env(safe-area-inset-top, 20px); /* 아이폰 노치 대응 */
+  right: 20px;
+  color: white;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 10px;
+  z-index: 10000;
+}
+
+/* ===============================
+   성공 메시지 가독성 수정 (추가)
+================================ */
+.successDesc {
+  font-size: 16px;
+  color: #555; /* 더 진하게 */
+  line-height: 1.6;
+  margin-bottom: 20px;
+  word-break: keep-all;
+  font-weight: 500;
+}
+
+/* 기존 overlay 도 z-index 확인 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}

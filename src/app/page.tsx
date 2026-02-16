@@ -1,123 +1,160 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { storage, db } from '../lib/firebase'; // firebase.ts 경로 확인
-import { ref, uploadBytesResumable, getDownloadURL, uploadBytes } from 'firebase/storage';
-import { collection, addDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { storage, db } from '../lib/firebase';
+import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { collection, addDoc } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
+import styles from './Home.module.css'; // CSS 모듈 임포트
 
 export default function Home() {
-  const [uploading, setUploading] = useState(false);
+  const [uploadState, setUploadState] = useState<'idle' | 'processing' | 'uploading' | 'success'>('idle');
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [photos, setPhotos] = useState<any[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // 1. 사진 목록 실시간 불러오기
-  useEffect(() => {
-    const q = query(collection(db, "photos"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPhotos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    return () => unsubscribe();
-  }, []);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
- // 2. 사진 압축 및 업로드
-const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const files = e.target.files;
-  if (!files || files.length === 0) return;
-
-  try {
-    setUploading(true);
     const fileArray = Array.from(files);
-
-    // 1. 모든 작업을 한꺼번에 생성
-    const uploadTasks = fileArray.map(async (file) => {
-      try {
-        // 이미지 압축
-        const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1280, useWebWorker: true };
-        const compressedFile = await imageCompression(file, options);
-
-        // 고유 파일명 생성
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${file.name}`;
-        const storageRef = ref(storage, `photos/${fileName}`);
-
-        // 업로드 후 결과 반환
-        const snapshot = await uploadBytes(storageRef, compressedFile);
-        const url = await getDownloadURL(snapshot.ref);
-
-        // Firestore에 저장하고 그 결과(문서 참조값)를 받음
-        const docData = {
-          url,
-          createdAt: new Date(),
-          fileName: file.name // 원본 파일명도 저장하면 확인하기 좋습니다
-        };
-
-        const docRef = addDoc(collection(db, "photos"), docData);
-
-        console.log("docRef에 뭐가 들었나",docRef)
-        
-        return docRef
-      } catch (innerError) {
-        console.error("개별 파일 업로드 실패:", file.name, innerError);
-        return null; // 하나 실패해도 나머지는 진행
-      }
-    });
-
-    // 2. 모든 업로드가 끝날 때까지 대기
-    await Promise.all(uploadTasks);
-
-    // 3. UI 복구 (이게 실행되어야 버튼이 바뀝니다)
-    setUploading(false);
-    alert(`${files.length}장의 사진 처리가 완료되었습니다!`);
+    setProgress({ current: 0, total: fileArray.length });
     
-    // input 값 초기화
-    e.target.value = ""; 
-    
-  } catch (error) {
-    console.error("전체 에러:", error);
-    setUploading(false);
-    alert("전송 과정 중 문제가 발생했습니다.");
-  }
-};
+    try {
+      setUploadState('processing');
+      const compressedFiles = await Promise.all(
+        fileArray.map(file =>
+          imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1280, useWebWorker: true })
+        )
+      );
+
+      setUploadState('uploading');
+
+      const uploadTasks = compressedFiles.map(async (compressedFile) => {
+        try {
+          const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const storageRef = ref(storage, `photos/${fileName}`);
+          const snapshot = await uploadBytes(storageRef, compressedFile);
+          const url = await getDownloadURL(snapshot.ref);
+
+          const docData = { url, createdAt: new Date() };
+          const docRef = await addDoc(collection(db, "photos"), docData);
+
+          setPhotos(prev => [{ id: docRef.id, ...docData }, ...prev]);
+          setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          return docRef;
+        } catch (err) {
+          setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          return null;
+        }
+      });
+
+      await Promise.all(uploadTasks);
+      await new Promise(res => setTimeout(res, 800));
+      setUploadState('success');
+      e.target.value = "";
+    } catch (error) {
+      setUploadState('idle');
+      alert("처리 중 오류가 발생했습니다.");
+    }
+  };
 
   return (
-    <main style={{ padding: '20px', textAlign: 'center', backgroundColor: '#fff5f7', minHeight: '100vh' }}>
-      <h1 style={{ color: '#ff69b4', fontSize: '28px', marginBottom: '10px' }}>💖 Happy Wedding 💖</h1>
-      <p style={{ marginBottom: '20px' }}>오늘의 소중한 순간을 공유해주세요!</p>
-      
-      {/* 모바일 친화적 업로드 버튼 */}
-      <label style={{
-        display: 'inline-block',
-        padding: '16px 32px',
-        backgroundColor: uploading ? '#cccccc' : '#ff69b4',
-        color: '#fff',
-        borderRadius: '50px',
-        cursor: 'pointer',
-        fontSize: '18px',
-        fontWeight: 'bold',
-        boxShadow: '0 4px 10px rgba(255, 105, 180, 0.3)'
-      }}>
-        {uploading ? "사진 전송 중..." : "📷 사진 선택하기"}
+    <main className={styles.container}>
+      {/* 2. 이미지 확대 모달 (최상단에 배치) */}
+      {selectedImage && (
+        <div className={styles.imageModal} onClick={() => setSelectedImage(null)}>
+          <div className={styles.modalClose}>✕</div>
+          <img src={selectedImage} alt="enlarged" />
+        </div>
+      )}
+      {uploadState !== 'idle' && (
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            {uploadState === 'processing' || uploadState === 'uploading' ? (
+              <>
+                <div className={styles.spinnerWrapper}>
+                  <div className={styles.spinner} />
+                </div>
+                <div className={styles.statusText}>
+                  {uploadState === 'processing'
+                    ? `사진 압축 중...`
+                    : (
+                      <>
+                        업로드 중...<br />
+                        ({progress.current} / {progress.total})
+                      </>
+                    )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={styles.successIcon}>✅</div>
+                <h3 className={styles.successTitle}>전송 완료!</h3>
+                <p className={styles.successDesc}>
+                   감사합니다.❤️
+                </p>
+                <button
+                  className={styles.confirmButton}
+                  onClick={() => setUploadState('idle')}
+                >
+                  확인
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.headerSection}>
+        <h1 className={styles.mainTitle}>세영 👩‍❤️‍👨 재민</h1>
+        {/* <h2 className={styles.subTitle}>
+          오늘의 소중한 추억을 <br /> 선물해 주세요 🎁
+        </h2> */}
+        <p className={styles.description}>
+          하객 여러분께서 직접 담아주신 찰나의 순간들이<br />
+          저희 부부에게는 가장 큰 선물이 됩니다.
+        </p>
+      </div>
+
+      <label className={styles.uploadLabel}>
+        📸 오늘의 추억 선물하기
         <input 
           type="file" 
           accept="image/*" 
           onChange={handleFileChange} 
-          disabled={uploading}
-          multiple
+          disabled={uploadState !== 'idle'} 
+          multiple 
           style={{ display: 'none' }} 
         />
       </label>
 
-      {/* 사진 갤러리 */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(2, 1fr)', 
-        gap: '12px', 
-        marginTop: '30px' 
-      }}>
-        {photos.map(photo => (
-          <div key={photo.id} style={{ overflow: 'hidden', borderRadius: '12px', aspectRatio: '1/1' }}>
-            <img src={photo.url} alt="wedding" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </div>
-        ))}
+      <div style={{ marginTop: '40px', textAlign: 'left' }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'baseline',
+          padding: '0 4px',
+          marginBottom: '10px' 
+        }}>
+          <h3 style={{ color: '#333', fontSize: '14px', margin: 0 ,fontWeight: 'bold'}}>공유한 사진들</h3>
+          <span style={{ color: '#ff69b4', fontSize: '14px', fontWeight: 'bold' }}>
+            총 {photos.length}장
+          </span>
+        </div>
+
+        <div className={styles.photoGrid}>
+          {photos.map(p => (
+            <div 
+              key={p.id} 
+              className={styles.photoItem} 
+              onClick={() => setSelectedImage(p.url)} // 클릭 시 이미지 URL 저장
+              style={{ cursor: 'pointer' }}
+            >
+              <img src={p.url} alt="wedding" />
+            </div>
+          ))}
+        </div>
       </div>
     </main>
   );
