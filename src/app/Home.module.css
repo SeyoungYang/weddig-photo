@@ -25,10 +25,14 @@
 /* 메인 타이틀 (가독성 개선) */
 .mainTitle {
   font-size: 24px;
+  line-height: 1.4; 
   margin-bottom: 12px;
-  color: #444; /* 선명하고 차분한 색상 */
+  color: #444;
   font-weight: bold;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.5px;  
+  padding: 4px 0;
+  display: block;
+  overflow: visible; 
 }
 
 .subTitle {
