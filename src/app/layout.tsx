@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "세영 👩‍❤️‍👨 재민 | 웨딩 사진 선물하기",
+  title: "세영 👩‍❤️‍👨 재민 | 웨딩 사진 전달하기",
   description: "저희의 소중한 순간을 사진으로 담아주셔서 감사합니다!",
 };
 

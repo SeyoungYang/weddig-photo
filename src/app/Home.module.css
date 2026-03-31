@@ -238,3 +238,75 @@
   align-items: center;
   z-index: 2000;
 }
+
+/* ===============================
+   이벤트 (추가)
+================================ */
+/* 이벤트 응모 박스 전체 */
+.eventBox {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #f9f9f9; /* 연한 배경색으로 구분 */
+  border-radius: 12px;
+  text-align: center;
+}
+
+/* 안내 문구 - 진하게 변경 */
+.eventText {
+  color: #222 !important; /* 확실한 검정색 */
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+/* 입력창 스타일 */
+.input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px; /* 아이폰에서 자동 줌 방지하려면 16px 이상 권장 */
+  color: #333;
+}
+
+/* 신랑/신부측 선택 버튼 */
+.sideSelector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.sideBtn {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ff69b4;
+  background: white;
+  color: #ff69b4;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.activeSide {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ff69b4;
+  background: #ff69b4; /* 분홍색 채우기 */
+  color: white;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
+/* 최종 응모 버튼 */
+.submitBtn {
+  width: 100%;
+  padding: 15px;
+  background-color: #333; /* 눈에 확 띄는 어두운 색 */
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}

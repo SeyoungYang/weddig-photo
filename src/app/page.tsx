@@ -13,12 +13,12 @@ export default function Home() {
   const [photos, setPhotos] = useState<any[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // --- 추가된 상태값 ---
+  // --- 추가된 상태값 (중복 체크 및 이벤트 응모) ---
   const [uploadedKeys, setUploadedKeys] = useState<Set<string>>(new Set());
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [entry, setEntry] = useState({ name: '', phone: '', side: '신랑측' });
 
-  // 초기 로드 시 LocalStorage 확인
+  // 초기 로드 시 LocalStorage 확인 (새로고침 대응)
   useEffect(() => {
     const savedKeys = localStorage.getItem('my_uploaded_photos');
     const submitted = localStorage.getItem('event_submitted');
@@ -33,7 +33,7 @@ export default function Home() {
     setUploadState('processing');
     setProgress({ current: 0, total: fileArray.length });
 
-    const chunkSize = 3; // 3개씩 병렬 처리
+    const chunkSize = 3; // 3개씩 병렬 처리로 속도 개선
     const newUploadedKeys = new Set(uploadedKeys);
 
     try {
@@ -42,15 +42,21 @@ export default function Home() {
         
         await Promise.all(chunk.map(async (file) => {
           const fileKey = `${file.name}_${file.size}`;
-          if (newUploadedKeys.has(fileKey)) return; // 중복 패스
+          
+          // 중복 파일 스킵 로직
+          if (newUploadedKeys.has(fileKey)) {
+            setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+            return;
+          }
 
-          // 압축 옵션 최적화 (속도 개선)
-          const compressedFile = await imageCompression(file, { 
-            maxSizeMB: 1.0, 
-            maxWidthOrHeight: 1080, 
+          const options = { 
+            maxSizeMB: 1.0,          // 목표 용량 상향으로 압축 속도 개선
+            maxWidthOrHeight: 1080, // 모바일 최적화 해상도
             useWebWorker: true 
-          });
+          };
 
+          // 압축 및 업로드
+          const compressedFile = await imageCompression(file, options);
           const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
           const storageRef = ref(storage, `photos/${fileName}`);
           const snapshot = await uploadBytes(storageRef, compressedFile);
@@ -59,17 +65,14 @@ export default function Home() {
           const docData = { url, createdAt: new Date() };
           const docRef = await addDoc(collection(db, "photos"), docData);
 
+          // 상태 업데이트
           setPhotos(prev => [{ id: docRef.id, ...docData }, ...prev]);
           newUploadedKeys.add(fileKey);
-        }));
-
-        setProgress(prev => ({ 
-          ...prev, 
-          current: Math.min(i + chunkSize, fileArray.length) 
+          setProgress(prev => ({ ...prev, current: prev.current + 1 }));
         }));
       }
 
-      // 로컬스토리지 업데이트 (영구 보관)
+      // 업로드 완료 후 로컬스토리지 저장
       setUploadedKeys(newUploadedKeys);
       localStorage.setItem('my_uploaded_photos', JSON.stringify(Array.from(newUploadedKeys)));
       
@@ -82,7 +85,7 @@ export default function Home() {
     }
   };
 
-  // 응모 제출 함수
+  // 이벤트 응모 제출
   const handleEventSubmit = async () => {
     if (!entry.name || !entry.phone) return alert("성함과 연락처를 입력해주세요!");
     try {
@@ -101,6 +104,7 @@ export default function Home() {
 
   return (
     <main className={styles.container}>
+      {/* 이미지 확대 모달 */}
       {selectedImage && (
         <div className={styles.imageModal} onClick={() => setSelectedImage(null)}>
           <div className={styles.modalClose}>✕</div>
@@ -108,6 +112,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* 업로드 진행 상태 모달 */}
       {uploadState !== 'idle' && (
         <div className={styles.overlay}>
           <div className={styles.modal}>
@@ -115,7 +120,11 @@ export default function Home() {
               <>
                 <div className={styles.spinnerWrapper}><div className={styles.spinner} /></div>
                 <div className={styles.statusText}>
-                  {uploadState === 'processing' ? `사진 압축 중...` : `업로드 중... (${progress.current} / {progress.total})`}
+                  <span className={styles.loadingTitle}>사진 전송 중...</span>
+                  <br />
+                  <span className={styles.progressCounter}>
+                    ({progress.current} / {progress.total})
+                  </span>
                 </div>
               </>
             ) : (
@@ -123,7 +132,7 @@ export default function Home() {
                 <div className={styles.successIcon}>✅</div>
                 <h3 className={styles.successTitle}>전송 완료!</h3>
                 
-                {/* 응모 폼 UI */}
+                {/* 이벤트 응모 영역 */}
                 {!isSubmitted ? (
                   <div className={styles.eventBox}>
                     <p className={styles.eventText}>축하의 마음을 담아 사진을 보내주신<br/>하객분들을 위한 작은 이벤트를 준비했어요!🎁</p>
@@ -154,13 +163,14 @@ export default function Home() {
                   <p className={styles.successDesc}>응모가 완료되었습니다. 감사합니다.❤️</p>
                 )}
                 
-                <button className={styles.confirmButton} onClick={() => setUploadState('idle')}>닫기</button>
+                <button className={styles.confirmButton} onClick={() => setUploadState('idle')}>확인</button>
               </div>
             )}
           </div>
         </div>
       )}
 
+      {/* 상단 헤더 섹션 */}
       <div className={styles.headerSection}>
         <h1 className={styles.mainTitle}>세영 👩‍❤️‍👨 재민</h1>
         <p className={styles.description}>
@@ -169,11 +179,13 @@ export default function Home() {
         </p>
       </div>
 
+      {/* 업로드 버튼 */}
       <label className={styles.uploadLabel}>
         📸 오늘의 추억 선물하기
         <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploadState !== 'idle'} multiple style={{ display: 'none' }} />
       </label>
 
+      {/* 사진 그리드 영역 */}
       <div style={{ marginTop: '40px', textAlign: 'left' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px', marginBottom: '10px' }}>
           <h3 style={{ color: '#333', fontSize: '14px', margin: 0 ,fontWeight: 'bold'}}>공유한 사진들</h3>
