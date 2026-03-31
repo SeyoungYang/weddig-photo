@@ -7,7 +7,14 @@ import { collection, addDoc } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 import styles from './Home.module.css';
 
+const openExternalBrowser = () => {
+  const url = window.location.href.replace(/https?:\/\//, "");
+  // 카카오톡 전용 커스텀 스킴 (안드로이드/iOS 공용)
+  window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent("https://" + url)}`;
+};
+
 export default function Home() {
+  const [isKakaotalk, setIsKakaotalk] = useState(false); //카카오톡 인앱여부
   const [uploadState, setUploadState] = useState<'idle' | 'processing' | 'uploading' | 'success'>('idle');
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [photos, setPhotos] = useState<any[]>([]);
@@ -22,8 +29,10 @@ export default function Home() {
   useEffect(() => {
     const savedKeys = localStorage.getItem('my_uploaded_photos');
     const submitted = localStorage.getItem('event_submitted');
+    const ua = navigator.userAgent.toLowerCase();
     if (savedKeys) setUploadedKeys(new Set(JSON.parse(savedKeys)));
     if (submitted === 'true') setIsSubmitted(true);
+    if (ua.includes("kakaotalk")) { setIsKakaotalk(true);}
   }, []);
   //에러로그 남기기 
   const logErrorToFirebase = async (error: any, context: string) => {
@@ -125,6 +134,13 @@ export default function Home() {
 
   return (
     <main className={styles.container}>
+      {/* 카카오톡 접속 시에만 상단에 노출 */}
+      {isKakaotalk && (
+        <div className={styles.kakaotalkBanner} onClick={openExternalBrowser}>
+          ⚠️ 카카오톡에서는 사진 업로드가 끊길 수 있어요. <br/>
+          <strong>여기를 눌러 [외부 브라우저]에서 열기</strong>
+        </div>
+      )}
       {/* 이미지 확대 모달 */}
       {selectedImage && (
         <div className={styles.imageModal} onClick={() => setSelectedImage(null)}>

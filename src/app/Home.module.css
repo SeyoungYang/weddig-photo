@@ -310,3 +310,23 @@
   font-weight: bold;
   cursor: pointer;
 }
+
+/*외부브라우저 유도*/
+.kakaotalkBanner {
+  background: #fee500; /* 카카오 노란색 */
+  color: #3c1e1e;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
