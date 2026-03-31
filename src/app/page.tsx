@@ -134,13 +134,18 @@ export default function Home() {
         <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploadState !== 'idle'} multiple style={{ display: 'none' }} />
       </label>
       
-      <div style={{ marginTop: '40px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px', marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '14px', margin: 0, fontWeight: 'bold' }}>공유한 사진들</h3>
+      {/* 사진 그리드 영역 */}
+      <div style={{ marginTop: '40px', textAlign: 'left' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px', marginBottom: '10px' }}>
+          <h3 style={{ color: '#333', fontSize: '14px', margin: 0, fontWeight: 'bold' }}>공유한 사진들</h3>
           <span style={{ color: '#ff69b4', fontSize: '14px', fontWeight: 'bold' }}>총 {photos.length}장</span>
         </div>
         <div className={styles.photoGrid}>
-          {photos.map(p => <div key={p.id} className={styles.photoItem} onClick={() => setSelectedImage(p.url)}><img src={p.url} alt="wedding" /></div>)}
+          {photos.map(p => (
+            <div key={p.id} className={styles.photoItem} onClick={() => setSelectedImage(p.url)} style={{ cursor: 'pointer' }}>
+              <img src={p.url} alt="wedding" />
+            </div>
+          ))}
         </div>
       </div>
     </main>
