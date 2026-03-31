@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { storage, db } from '../lib/firebase';
 import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { collection, addDoc } from 'firebase/firestore';
@@ -9,6 +9,7 @@ import styles from './Home.module.css';
 interface PhotoData { id: string; url: string; createdAt: Date | string; }
 
 export default function Home() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isKakaotalk, setIsKakaotalk] = useState(false);
   const [uploadState, setUploadState] = useState<'idle' | 'processing' | 'success'>('idle');
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -19,18 +20,22 @@ export default function Home() {
   const [entry, setEntry] = useState({ name: '', phone: '', side: '신랑측' });
 
   useEffect(() => {
-    // 1. 중복 방지용 키 복구
+    // 로컬 데이터 복구 (새로고침 대비)
     const savedKeys = localStorage.getItem('my_uploaded_keys');
-    if (savedKeys) setUploadedKeys(new Set(JSON.parse(savedKeys)));
-    
-    // 2. 화면 렌더링용 사진 데이터 복구 (새로고침 방어)
     const savedPhotos = localStorage.getItem('my_photo_data');
-    if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
-
     const submitted = localStorage.getItem('event_submitted');
+    
+    if (savedKeys) setUploadedKeys(new Set(JSON.parse(savedKeys)));
+    if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
     if (submitted === 'true') setIsSubmitted(true);
+
     if (navigator.userAgent.toLowerCase().includes("kakaotalk")) setIsKakaotalk(true);
   }, []);
+
+  const openExternalBrowser = () => {
+    const url = window.location.href.replace(/https?:\/\//, "");
+    window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent("https://" + url)}`;
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileArray = Array.from(e.target.files || []);
@@ -48,22 +53,22 @@ export default function Home() {
           continue;
         }
 
-        const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1080, useWebWorker: true });
+        const compressed = await imageCompression(file, { maxSizeMB: 0.6, maxWidthOrHeight: 1080, useWebWorker: true });
         const storageRef = ref(storage, `photos/${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
         const snap = await uploadBytes(storageRef, compressed);
         const url = await getDownloadURL(snap.ref);
         
-        const docData = { url, createdAt: new Date().toISOString() }; // 로컬스토리지 저장을 위해 ISO 문자열 변환
+        const docData = { url, createdAt: new Date().toISOString() };
         const docRef = await addDoc(collection(db, "photos"), docData);
         
         const newPhoto = { id: docRef.id, ...docData };
         newKeys.add(key);
 
-        // 상태 업데이트 및 로컬스토리지 즉시 동기화
+        // 실시간 사진 추가 및 로컬 저장
         setPhotos(prev => {
-          const updatedPhotos = [newPhoto, ...prev];
-          localStorage.setItem('my_photo_data', JSON.stringify(updatedPhotos));
-          return updatedPhotos;
+          const updated = [newPhoto, ...prev];
+          localStorage.setItem('my_photo_data', JSON.stringify(updated));
+          return updated;
         });
         setProgress(prev => ({ ...prev, current: prev.current + 1 }));
       }
@@ -74,7 +79,7 @@ export default function Home() {
     } catch (err) {
       console.error(err);
       setUploadState('idle');
-      alert("전송 중 오류가 발생했습니다.");
+      alert("전송 중 오류가 발생했습니다! 다시 시도해주세요. 😭");
     } finally {
       if (e.target) e.target.value = "";
     }
@@ -93,48 +98,62 @@ export default function Home() {
   return (
     <main className={styles.container}>
       {isKakaotalk && (
-        <div className={styles.kakaotalkBanner} onClick={() => window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(window.location.href)}`}>
-          <p>⚠️ 카톡에선 업로드가 불안정합니다. <strong>[외부 브라우저 열기]</strong>를 눌러주세요.</p>
+        <div className={styles.kakaotalkBanner} onClick={openExternalBrowser} style={{ cursor: 'pointer' }}>
+          <p>⚠️ 카카오톡 업로드는 불안정할 수 있습니다.<br/>원활한 이용을 위해 <strong>[외부 브라우저]</strong>로 열어주세요.</p>
         </div>
       )}
-      {selectedImage && <div className={styles.imageModal} onClick={() => setSelectedImage(null)}><img src={selectedImage} alt="zoom" /></div>}
+
+      {selectedImage && <div className={styles.imageModal} onClick={() => setSelectedImage(null)}><div className={styles.modalClose}>✕</div><img src={selectedImage} alt="enlarged" /></div>}
+      
       {uploadState !== 'idle' && (
         <div className={styles.overlay}>
           <div className={styles.modal}>
             {uploadState === 'processing' ? (
               <div className={styles.statusText}>
                 <div className={styles.spinner} />
-                사진 전송 중... ({progress.current}/{progress.total})
+                오늘의 추억을 전송 중입니다... ({progress.current}/{progress.total})
               </div>
             ) : (
               <div className={styles.successContent}>
-                <h3>전송 완료!</h3>
+                <h3 style={{ marginBottom: '15px' }}>전송 완료! ❤️</h3>
                 {!isSubmitted ? (
                   <div className={styles.eventBox}>
+                    <p style={{ fontSize: '13px', color: '#666', marginBottom: '10px' }}>전송해주신 소중한 사진 감사합니다!<br/>이벤트에 응모하시겠어요?</p>
                     <input className={styles.input} placeholder="성함" onChange={e => setEntry({...entry, name: e.target.value})} />
                     <input className={styles.input} placeholder="연락처" type="tel" onChange={e => setEntry({...entry, phone: e.target.value.replace(/[^0-9]/g, '')})} />
                     <div className={styles.sideSelector}>
                       <button className={entry.side === '신랑측' ? styles.activeSide : styles.sideBtn} onClick={() => setEntry({...entry, side: '신랑측'})}>신랑측</button>
                       <button className={entry.side === '신부측' ? styles.activeSide : styles.sideBtn} onClick={() => setEntry({...entry, side: '신부측'})}>신부측</button>
                     </div>
-                    <button className={styles.submitBtn} onClick={handleEventSubmit}>이벤트 응모</button>
+                    <button className={styles.submitBtn} onClick={handleEventSubmit}>이벤트 응모하기</button>
                   </div>
-                ) : <p>응모 완료❤️</p>}
+                ) : <p style={{ margin: '20px 0', color: '#ff69b4', fontWeight: 'bold' }}>이벤트 응모까지 완료되었습니다! 감사합니다. ❤️</p>}
                 <button className={styles.confirmButton} onClick={() => setUploadState('idle')}>확인</button>
               </div>
             )}
           </div>
         </div>
       )}
+
       <div className={styles.headerSection}><h1 className={styles.mainTitle}>세영 👩‍❤️‍👨 재민</h1></div>
       
-      {/* 불필요한 onClick 로직과 ref 제거 */}
-      <label className={styles.uploadLabel}>
+      <div 
+        className={styles.uploadLabel} 
+        onClick={() => fileInputRef.current?.click()}
+        style={{ cursor: 'pointer' }}
+      >
         📸 오늘의 추억 선물하기
-        <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploadState !== 'idle'} multiple style={{ display: 'none' }} />
-      </label>
+      </div>
+      <input 
+        ref={fileInputRef}
+        type="file" 
+        accept="image/*" 
+        onChange={handleFileChange} 
+        disabled={uploadState !== 'idle'} 
+        multiple 
+        style={{ display: 'none' }} 
+      />
       
-      {/* 사진 그리드 영역 */}
       <div style={{ marginTop: '40px', textAlign: 'left' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px', marginBottom: '10px' }}>
           <h3 style={{ color: '#333', fontSize: '14px', margin: 0, fontWeight: 'bold' }}>공유한 사진들</h3>
