@@ -12,8 +12,9 @@ export default function Home() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [photos, setPhotos] = useState<any[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadedKeys, setUploadedKeys] = useState<Set<string>>(new Set());
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange_old = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -58,6 +59,65 @@ export default function Home() {
       alert("처리 중 오류가 발생했습니다.");
     }
   };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+    const totalFiles = fileArray.length;
+    
+    setUploadState('processing');
+    setProgress({ current: 0, total: totalFiles });
+
+    try {
+      for (let i = 0; i < totalFiles; i++) {
+        const file = fileArray[i];
+        
+        // [중복 체크] 파일명 + 원본 크기로 고유 키 생성
+        const fileKey = `${file.name}_${file.size}`;
+        if (uploadedKeys.has(fileKey)) {
+          console.log("이미 올린 사진 패스:", file.name);
+          setProgress(prev => ({ ...prev, current: i + 1 }));
+          continue;
+        }
+
+        // [1단계: 압축] 하나씩 압축 진행 (메모리 절약)
+        const compressedFile = await imageCompression(file, { 
+          maxSizeMB: 0.5, 
+          maxWidthOrHeight: 1280, 
+          useWebWorker: true 
+        });
+
+        // [2단계: 업로드] 압축 끝나면 즉시 업로드 시작
+        setUploadState('uploading');
+        
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const storageRef = ref(storage, `photos/${fileName}`);
+        const snapshot = await uploadBytes(storageRef, compressedFile);
+        const url = await getDownloadURL(snapshot.ref);
+
+        const docData = { url, createdAt: new Date() };
+        const docRef = await addDoc(collection(db, "photos"), docData);
+
+        // 성공 리스트 업데이트
+        setPhotos(prev => [{ id: docRef.id, ...docData }, ...prev]);
+        setUploadedKeys(prev => new Set(prev).add(fileKey)); // 중복 목록에 추가
+        setProgress({ current: i + 1, total: totalFiles });
+        
+        // 다시 다음 파일 압축을 위해 상태 변경 (UI 자연스럽게)
+        setUploadState('processing');
+      }
+
+      await new Promise(res => setTimeout(res, 800));
+      setUploadState('success');
+      e.target.value = "";
+    } catch (error) {
+      console.error(error);
+      setUploadState('idle');
+      alert("처리 중 오류가 발생했습니다.");
+    }
+};
 
   return (
     <main className={styles.container}>
