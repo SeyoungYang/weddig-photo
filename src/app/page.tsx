@@ -7,6 +7,8 @@ import { collection, addDoc } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 import styles from './Home.module.css';
 
+interface PhotoData { id: string; url: string; createdAt: Date; }
+
 const openExternalBrowser = () => {
   const url = window.location.href.replace(/https?:\/\//, "");
   // 카카오톡 전용 커스텀 스킴 (안드로이드/iOS 공용)
@@ -19,7 +21,7 @@ export default function Home() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [photos, setPhotos] = useState<any[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-
+  
   // --- 추가된 상태값 (중복 체크 및 이벤트 응모) ---
   const [uploadedKeys, setUploadedKeys] = useState<Set<string>>(new Set());
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -56,8 +58,10 @@ export default function Home() {
     setUploadState('processing');
     setProgress({ current: 0, total: fileArray.length });
 
-    const chunkSize = 2; // 3개씩 병렬 처리로 속도 개선
+    const chunkSize = 3; // 3개씩 병렬 처리로 속도 개선
     const newUploadedKeys = new Set(uploadedKeys);
+    let completedCount = 0;
+    const newlyAddedPhotos: PhotoData[] = []; // 한꺼번에 UI에 반영하기 위한 임시 배열
 
     try {
       for (let i = 0; i < fileArray.length; i += chunkSize) {
@@ -87,12 +91,15 @@ export default function Home() {
 
           const docData = { url, createdAt: new Date() };
           const docRef = await addDoc(collection(db, "photos"), docData);
-
-          // 상태 업데이트
-          setPhotos(prev => [{ id: docRef.id, ...docData }, ...prev]);
+          newlyAddedPhotos.push({ id: docRef.id, ...docData });
           newUploadedKeys.add(fileKey);
-          setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          completedCount++;         
         }));
+        // 상태 업데이트
+        setProgress({ current: completedCount, total: fileArray.length });
+        setPhotos(prev => [...newlyAddedPhotos, ...prev]);
+        newlyAddedPhotos.length = 0; // 임시 배열 비우기
+        
       }
 
       // 업로드 완료 후 로컬스토리지 저장
@@ -136,9 +143,11 @@ export default function Home() {
     <main className={styles.container}>
       {/* 카카오톡 접속 시에만 상단에 노출 */}
       {isKakaotalk && (
-        <div className={styles.kakaotalkBanner} onClick={openExternalBrowser}>
-          ⚠️ 카카오톡에서는 사진 업로드가 끊길 수 있어요. <br/>
-          <strong>여기를 눌러 [외부 브라우저]에서 열기</strong>
+        <div className={styles.kakaotalkBanner}>
+          <p>⚠️ 카카오톡에서는 사진 업로드가 불안정합니다.</p>
+          <div className={styles.guideStep}>
+            <strong>우측 상단 또는 하단의 [⋮] 나 [︙] 버튼 누르기</strong> → <strong>[다른 브라우저로 열기]</strong> 선택
+          </div>
         </div>
       )}
       {/* 이미지 확대 모달 */}
