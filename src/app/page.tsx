@@ -1,15 +1,14 @@
 "use client";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { storage, db } from '../lib/firebase';
 import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { collection, addDoc } from 'firebase/firestore';
 import imageCompression from 'browser-image-compression';
 import styles from './Home.module.css';
 
-interface PhotoData { id: string; url: string; createdAt: Date; }
+interface PhotoData { id: string; url: string; createdAt: Date | string; }
 
 export default function Home() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isKakaotalk, setIsKakaotalk] = useState(false);
   const [uploadState, setUploadState] = useState<'idle' | 'processing' | 'success'>('idle');
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -20,9 +19,15 @@ export default function Home() {
   const [entry, setEntry] = useState({ name: '', phone: '', side: '신랑측' });
 
   useEffect(() => {
-    const savedKeys = localStorage.getItem('my_uploaded_photos');
-    const submitted = localStorage.getItem('event_submitted');
+    // 1. 중복 방지용 키 복구
+    const savedKeys = localStorage.getItem('my_uploaded_keys');
     if (savedKeys) setUploadedKeys(new Set(JSON.parse(savedKeys)));
+    
+    // 2. 화면 렌더링용 사진 데이터 복구 (새로고침 방어)
+    const savedPhotos = localStorage.getItem('my_photo_data');
+    if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
+
+    const submitted = localStorage.getItem('event_submitted');
     if (submitted === 'true') setIsSubmitted(true);
     if (navigator.userAgent.toLowerCase().includes("kakaotalk")) setIsKakaotalk(true);
   }, []);
@@ -36,7 +41,6 @@ export default function Home() {
     const newKeys = new Set(uploadedKeys);
 
     try {
-      // 순차적으로 처리하여 안정성 확보 + 실시간 UI 반영
       for (const file of fileArray) {
         const key = `${file.name}_${file.size}`;
         if (newKeys.has(key)) {
@@ -49,19 +53,23 @@ export default function Home() {
         const snap = await uploadBytes(storageRef, compressed);
         const url = await getDownloadURL(snap.ref);
         
-        const docData = { url, createdAt: new Date() };
+        const docData = { url, createdAt: new Date().toISOString() }; // 로컬스토리지 저장을 위해 ISO 문자열 변환
         const docRef = await addDoc(collection(db, "photos"), docData);
         
         const newPhoto = { id: docRef.id, ...docData };
         newKeys.add(key);
 
-        // [핵심] 한 장 성공할 때마다 즉시 리스트 상단에 추가
-        setPhotos(prev => [newPhoto, ...prev]);
+        // 상태 업데이트 및 로컬스토리지 즉시 동기화
+        setPhotos(prev => {
+          const updatedPhotos = [newPhoto, ...prev];
+          localStorage.setItem('my_photo_data', JSON.stringify(updatedPhotos));
+          return updatedPhotos;
+        });
         setProgress(prev => ({ ...prev, current: prev.current + 1 }));
       }
 
       setUploadedKeys(newKeys);
-      localStorage.setItem('my_uploaded_photos', JSON.stringify(Array.from(newKeys)));
+      localStorage.setItem('my_uploaded_keys', JSON.stringify(Array.from(newKeys)));
       setUploadState('success');
     } catch (err) {
       console.error(err);
@@ -119,10 +127,13 @@ export default function Home() {
         </div>
       )}
       <div className={styles.headerSection}><h1 className={styles.mainTitle}>세영 👩‍❤️‍👨 재민</h1></div>
-      <label className={styles.uploadLabel} onClick={() => fileInputRef.current?.click()}>
+      
+      {/* 불필요한 onClick 로직과 ref 제거 */}
+      <label className={styles.uploadLabel}>
         📸 오늘의 추억 선물하기
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} disabled={uploadState !== 'idle'} multiple style={{ display: 'none' }} />
+        <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploadState !== 'idle'} multiple style={{ display: 'none' }} />
       </label>
+      
       <div style={{ marginTop: '40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px', marginBottom: '10px' }}>
           <h3 style={{ fontSize: '14px', margin: 0, fontWeight: 'bold' }}>공유한 사진들</h3>
