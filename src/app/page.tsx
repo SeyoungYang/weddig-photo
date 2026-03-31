@@ -36,7 +36,7 @@ export default function Home() {
       createdAt: new Date()
     });
   } catch (e) {
-    console.error("Failed to log error to Firebase:", e);
+    console.error("Firebase 로그 저장 자체 실패:", e);
   }
 };
 
@@ -94,7 +94,7 @@ export default function Home() {
       e.target.value = "";
     } catch (error) {
       console.error(error);
-      logErrorToFirebase(error, "file_upload_process");
+      await logErrorToFirebase(error, "file_upload_process");
       setUploadState('idle');
       alert(
         "앗, 사진을 올리는 중에 잠시 끊겼어요! 😅\n\n" +
