@@ -111,8 +111,12 @@ export default function Home() {
             {uploadState === 'processing' ? (
               <div className={styles.statusText}>
                 <div className={styles.spinner} />
-                오늘의 추억을 전송 중입니다... ({progress.current}/{progress.total})
-              </div>
+                  <span className={styles.loadingTitle}>사진 전송 중입니다... </span>
+                  <br />
+                  <span className={styles.progressCounter}>
+                    ({progress.current}/{progress.total})
+                  </span>                  
+                </div>
             ) : (
               <div className={styles.successContent}>
                 <h3 style={{ marginBottom: '15px' }}>전송 완료! ❤️</h3>
