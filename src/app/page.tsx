@@ -25,6 +25,20 @@ export default function Home() {
     if (savedKeys) setUploadedKeys(new Set(JSON.parse(savedKeys)));
     if (submitted === 'true') setIsSubmitted(true);
   }, []);
+  //에러로그 남기기 
+  const logErrorToFirebase = async (error: any, context: string) => {
+  try {
+    await addDoc(collection(db, "error_logs"), {
+      message: error.message || "Unknown Error",
+      stack: error.stack || "",
+      context: context, // 어느 단계에서 났는지 (예: 'upload' 또는 'compression')
+      userAgent: navigator.userAgent, // 사용자의 브라우저/기기 정보
+      createdAt: new Date()
+    });
+  } catch (e) {
+    console.error("Failed to log error to Firebase:", e);
+  }
+};
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileArray = Array.from(e.target.files || []);
@@ -33,7 +47,7 @@ export default function Home() {
     setUploadState('processing');
     setProgress({ current: 0, total: fileArray.length });
 
-    const chunkSize = 3; // 3개씩 병렬 처리로 속도 개선
+    const chunkSize = 2; // 3개씩 병렬 처리로 속도 개선
     const newUploadedKeys = new Set(uploadedKeys);
 
     try {
@@ -50,7 +64,7 @@ export default function Home() {
           }
 
           const options = { 
-            maxSizeMB: 1.0,          // 목표 용량 상향으로 압축 속도 개선
+            maxSizeMB: 0.8,          // 목표 용량 상향으로 압축 속도 개선
             maxWidthOrHeight: 1080, // 모바일 최적화 해상도
             useWebWorker: true 
           };
@@ -80,8 +94,15 @@ export default function Home() {
       e.target.value = "";
     } catch (error) {
       console.error(error);
+      logErrorToFirebase(error, "file_upload_process");
       setUploadState('idle');
-      alert("처리 중 오류가 발생했습니다.");
+      alert(
+        "앗, 사진을 올리는 중에 잠시 끊겼어요! 😅\n\n" +
+        "💡 해결 방법:\n" +
+        "1. 인터넷 연결(LTE/5G)을 확인해주세요.\n" +
+        "2. 사진 장수를 조금만 줄여서 다시 시도해보세요.\n" +
+        "3. 방금 성공한 사진은 자동으로 건너뛰니 안심하세요!"
+      );
     }
   };
 
