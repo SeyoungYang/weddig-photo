@@ -29,12 +29,26 @@ export default function Home() {
     if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
     if (submitted === 'true') setIsSubmitted(true);
 
-    if (navigator.userAgent.toLowerCase().includes("kakaotalk")) setIsKakaotalk(true);
+    const ua = navigator.userAgent.toLowerCase();
+
+    if (ua.includes("kakaotalk")) {
+      setIsKakaotalk(true);
+      if (ua.includes("android")) {
+        // location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(window.location.href)}`;
+      }
+    }
   }, []);
 
-  const openExternalBrowser = () => {
-    const url = window.location.href.replace(/https?:\/\//, "");
-    window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent("https://" + url)}`;
+  // [중요] 카톡 외부 브라우저 오픈 핸들러 (iOS/Android 공용 대응)
+  const handleKakaotalkOut = () => {
+    const url = window.location.href;
+    if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+      // iOS는 이 방식이 가장 잘 먹힘
+      location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`;
+    } else {
+      // 안드로이드 대응
+      location.href = `intent://${url.replace(/https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,7 +112,7 @@ export default function Home() {
   return (
     <main className={styles.container}>
       {isKakaotalk && (
-        <div className={styles.kakaotalkBanner} onClick={openExternalBrowser} style={{ cursor: 'pointer' }}>
+        <div className={styles.kakaotalkBanner} onClick={handleKakaotalkOut} style={{ cursor: 'pointer' }}>
           <p>⚠️ 카카오톡 업로드는 불안정할 수 있습니다.<br/>원활한 이용을 위해 <strong>[외부 브라우저]</strong>로 열어주세요.</p>
         </div>
       )}
@@ -116,6 +130,9 @@ export default function Home() {
                   <span className={styles.progressCounter}>
                     ({progress.current}/{progress.total})
                   </span>                  
+                  <p style={{ fontSize: '11px', color: '#ff4d4d', marginTop: '8px', fontWeight: 'normal' }}>
+                    ⚠️ 전송 완료 전까지 <strong>화면을 끄거나 닫지 마세요!</strong>
+                  </p>
                 </div>
             ) : (
               <div className={styles.successContent}>
@@ -141,22 +158,17 @@ export default function Home() {
 
       <div className={styles.headerSection}><h1 className={styles.mainTitle}>세영 👩‍❤️‍👨 재민</h1></div>
       
-      <div 
-        className={styles.uploadLabel} 
-        onClick={() => fileInputRef.current?.click()}
-        style={{ cursor: 'pointer' }}
-      >
+      <label className={styles.uploadLabel} style={{ cursor: 'pointer', display: 'block' }}>
         📸 오늘의 추억 선물하기
-      </div>
-      <input 
-        ref={fileInputRef}
-        type="file" 
-        accept="image/*" 
-        onChange={handleFileChange} 
-        disabled={uploadState !== 'idle'} 
-        multiple 
-        style={{ display: 'none' }} 
-      />
+        <input 
+          type="file" 
+          accept="image/*" 
+          onChange={handleFileChange} 
+          disabled={uploadState !== 'idle'} 
+          multiple 
+          style={{ display: 'none' }} 
+        />
+      </label>
       
       <div style={{ marginTop: '40px', textAlign: 'left' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px', marginBottom: '10px' }}>
