@@ -30,37 +30,46 @@ export default function Home() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileArray = Array.from(e.target.files || []);
     if (fileArray.length === 0) return;
+    
     setUploadState('processing');
     setProgress({ current: 0, total: fileArray.length });
     const newKeys = new Set(uploadedKeys);
-    let done = 0;
 
     try {
-      for (let i = 0; i < fileArray.length; i += 2) { // 2개씩 병렬 처리
-        const chunk = fileArray.slice(i, i + 2);
-        const newPhotos: PhotoData[] = [];
-        await Promise.all(chunk.map(async (file) => {
-          const key = `${file.name}_${file.size}`;
-          if (newKeys.has(key)) { done++; return; }
-          const compressed = await imageCompression(file, { maxSizeMB: 0.6, maxWidthOrHeight: 1080, useWebWorker: true });
-          const storageRef = ref(storage, `photos/${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
-          const snap = await uploadBytes(storageRef, compressed);
-          const url = await getDownloadURL(snap.ref);
-          const docRef = await addDoc(collection(db, "photos"), { url, createdAt: new Date() });
-          newPhotos.push({ id: docRef.id, url, createdAt: new Date() });
-          newKeys.add(key);
-          done++;
-        }));
-        setPhotos(prev => [...newPhotos, ...prev]);
-        setProgress({ current: done, total: fileArray.length });
+      // 순차적으로 처리하여 안정성 확보 + 실시간 UI 반영
+      for (const file of fileArray) {
+        const key = `${file.name}_${file.size}`;
+        if (newKeys.has(key)) {
+          setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+          continue;
+        }
+
+        const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1080, useWebWorker: true });
+        const storageRef = ref(storage, `photos/${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+        const snap = await uploadBytes(storageRef, compressed);
+        const url = await getDownloadURL(snap.ref);
+        
+        const docData = { url, createdAt: new Date() };
+        const docRef = await addDoc(collection(db, "photos"), docData);
+        
+        const newPhoto = { id: docRef.id, ...docData };
+        newKeys.add(key);
+
+        // [핵심] 한 장 성공할 때마다 즉시 리스트 상단에 추가
+        setPhotos(prev => [newPhoto, ...prev]);
+        setProgress(prev => ({ ...prev, current: prev.current + 1 }));
       }
+
       setUploadedKeys(newKeys);
       localStorage.setItem('my_uploaded_photos', JSON.stringify(Array.from(newKeys)));
       setUploadState('success');
     } catch (err) {
+      console.error(err);
       setUploadState('idle');
       alert("전송 중 오류가 발생했습니다.");
-    } finally { if (e.target) e.target.value = ""; }
+    } finally {
+      if (e.target) e.target.value = "";
+    }
   };
 
   const handleEventSubmit = async () => {
@@ -85,7 +94,10 @@ export default function Home() {
         <div className={styles.overlay}>
           <div className={styles.modal}>
             {uploadState === 'processing' ? (
-              <div className={styles.statusText}>전송 중... ({progress.current}/{progress.total})</div>
+              <div className={styles.statusText}>
+                <div className={styles.spinner} />
+                사진 전송 중... ({progress.current}/{progress.total})
+              </div>
             ) : (
               <div className={styles.successContent}>
                 <h3>전송 완료!</h3>
@@ -113,7 +125,7 @@ export default function Home() {
       </label>
       <div style={{ marginTop: '40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px', marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '14px', margin: 0 }}>공유한 사진들</h3>
+          <h3 style={{ fontSize: '14px', margin: 0, fontWeight: 'bold' }}>공유한 사진들</h3>
           <span style={{ color: '#ff69b4', fontSize: '14px', fontWeight: 'bold' }}>총 {photos.length}장</span>
         </div>
         <div className={styles.photoGrid}>
