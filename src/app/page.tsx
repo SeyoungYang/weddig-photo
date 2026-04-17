@@ -6,25 +6,29 @@ import { collection, addDoc } from "firebase/firestore";
 import imageCompression from "browser-image-compression";
 
 // ─── 설정 ────────────────────────────────────────────────
-const CONCURRENCY = 6; // 동시 업로드 수
+const CONCURRENCY = 6;
 
 const COMPRESS_OPTIONS = {
-  maxSizeMB: 1.5,          // 너무 작게 압축하면 오히려 연산 오래 걸림
-  maxWidthOrHeight: 1920,  // 해상도 제한 최소화
-  useWebWorker: true,      // 메인 스레드 블로킹 방지
-  initialQuality: 0.7,     // 품질 낮춰서 압축 속도 향상
-  fileType: "image/jpeg" as const, // PNG→JPEG 변환으로 파일 크기 감소
+  maxSizeMB: 1.5,
+  maxWidthOrHeight: 1920,
+  useWebWorker: true,
+  initialQuality: 0.7,
+  fileType: "image/jpeg" as const,
 };
 // ─────────────────────────────────────────────────────────
 
 interface PhotoData { id: string; url: string; createdAt: string; }
 
-async function uploadSingle(file: File): Promise<PhotoData> {
+
+async function uploadSingle(
+  file: File,
+  onCompressed: () => void
+): Promise<PhotoData> {
   const compressed = await imageCompression(file, COMPRESS_OPTIONS);
+  onCompressed(); // 압축 완료 콜백
   const storageRef = ref(storage, `photos/${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
   const snap = await uploadBytes(storageRef, compressed);
   const url = await getDownloadURL(snap.ref);
-  // Firestore 쓰기는 await 없이 — Storage 업로드 완료 후 백그라운드 처리
   addDoc(collection(db, "photos"), { url, createdAt: new Date().toISOString() });
   return { id: snap.ref.name, url, createdAt: new Date().toISOString() };
 }
@@ -49,7 +53,7 @@ async function runWithConcurrency<T>(
 export default function Home() {
   const [isKakaotalk, setIsKakaotalk] = useState(false);
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done">("idle");
-  const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 });
+  const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0, compressing: 0 });
   const [uploadedKeys, setUploadedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -76,11 +80,13 @@ export default function Home() {
     if (!newFiles.length) { alert("이미 전송한 사진이에요!"); return; }
 
     setUploadState("uploading");
-    setProgress({ done: 0, total: newFiles.length, failed: 0 });
+    setProgress({ done: 0, total: newFiles.length, failed: 0, compressing: 0 });
 
     const newKeys = new Set(uploadedKeys);
     const tasks = newFiles.map(file => async () => {
-      const result = await uploadSingle(file);
+      const result = await uploadSingle(file, () => {
+        setProgress(p => ({ ...p, compressing: p.compressing + 1 }));
+      });
       newKeys.add(`${file.name}_${file.size}_${file.lastModified}`);
       return result;
     });
@@ -95,10 +101,12 @@ export default function Home() {
 
     setUploadedKeys(newKeys);
     localStorage.setItem("my_uploaded_keys", JSON.stringify(Array.from(newKeys)));
+    await new Promise(resolve => setTimeout(resolve, 700));
     setUploadState("done");
     if (e.target) e.target.value = "";
   }, [uploadedKeys]);
 
+  // 전송 완료 기준 100%
   const progressPercent = progress.total > 0
     ? Math.round((progress.done / progress.total) * 100)
     : 0;
@@ -107,7 +115,6 @@ export default function Home() {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Noto+Serif+KR:wght@300;400&family=Cardo:ital@1&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Noto+Serif+KR:wght@300;400&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
           --cream: #faf7f2; --warm-white: #fff9f4;
@@ -142,15 +149,13 @@ export default function Home() {
         .header-names {
           font-family: 'Cormorant Garamond', serif;
           font-size: 36px; font-weight: 400;
-          color: var(--text-dark); letter-spacing: 2px;
-          margin-bottom: 4px;
+          color: var(--text-dark); letter-spacing: 2px; margin-bottom: 4px;
         }
         .header-names span { color: var(--rose); font-size: 22px; vertical-align: middle; }
         .header-names-en {
           font-family: 'Cardo', serif;
           font-size: 12px; font-style: italic;
-          letter-spacing: 4px; color: var(--text-light);
-          margin-bottom: 0;
+          letter-spacing: 4px; color: var(--text-light); margin-bottom: 0;
         }
         .header-divider {
           display: flex; align-items: center;
@@ -160,9 +165,7 @@ export default function Home() {
           content: ''; flex: 1; max-width: 60px; height: 1px;
           background: linear-gradient(to right, transparent, var(--rose-light));
         }
-        .header-divider::after {
-          background: linear-gradient(to left, transparent, var(--rose-light));
-        }
+        .header-divider::after { background: linear-gradient(to left, transparent, var(--rose-light)); }
         .header-divider-icon { color: var(--rose-light); font-size: 14px; }
         .header-desc { font-size: 13px; color: var(--text-mid); line-height: 1.9; font-weight: 300; }
         .upload-wrap { padding: 0 24px; margin-bottom: 36px; }
@@ -173,8 +176,7 @@ export default function Home() {
           background: var(--warm-white);
           border: 1.5px solid var(--rose-light);
           border-radius: 2px; cursor: pointer;
-          transition: background 0.2s;
-          position: relative; overflow: hidden;
+          transition: background 0.2s; position: relative; overflow: hidden;
         }
         .upload-label::before {
           content: ''; position: absolute; inset: 0;
@@ -188,17 +190,50 @@ export default function Home() {
           color: var(--text-dark); letter-spacing: 1px; position: relative; z-index: 1;
         }
         .upload-sub { font-size: 11px; color: var(--text-light); position: relative; z-index: 1; }
+
+        /* 오버레이 */
         .overlay {
           position: fixed; inset: 0;
           background: rgba(44, 36, 32, 0.55);
           backdrop-filter: blur(4px);
           display: flex; align-items: center; justify-content: center;
-          z-index: 100; padding: 24px;
+          z-index: 100; padding: 24px; overflow: hidden;
         }
+
+        /* 완료 모달 페이드인 */
         .modal-card {
           background: var(--warm-white); border-radius: 2px;
           padding: 36px 28px; width: 100%; max-width: 320px; text-align: center;
+          position: relative; z-index: 10;
+          animation: modalIn 0.4s ease;
         }
+        @keyframes modalIn {
+          from { transform: scale(0.92) translateY(8px); opacity: 0; }
+          to   { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .done-icon {
+          font-size: 40px; margin-bottom: 12px;
+          animation: heartBeat 0.6s ease 0.2s both;
+        }
+        @keyframes heartBeat {
+          0%   { transform: scale(0.5); opacity: 0; }
+          60%  { transform: scale(1.2); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .done-title {
+          font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 300;
+          color: var(--text-dark); margin-bottom: 8px;
+          animation: fadeUp 0.5s ease 0.35s both;
+        }
+        .done-sub {
+          font-size: 13px; color: var(--text-mid); margin-bottom: 8px; line-height: 1.7;
+          animation: fadeUp 0.5s ease 0.45s both;
+        }
+        @keyframes fadeUp {
+          from { transform: translateY(6px); opacity: 0; }
+          to   { transform: translateY(0); opacity: 1; }
+        }
+
         .modal-title {
           font-family: 'Cormorant Garamond', serif;
           font-size: 22px; font-weight: 300;
@@ -219,12 +254,6 @@ export default function Home() {
         }
         .progress-text { font-size: 13px; color: var(--text-mid); margin-bottom: 8px; }
         .progress-warn { font-size: 11px; color: #c97a6a; margin-top: 14px; line-height: 1.6; }
-        .done-icon { font-size: 36px; margin-bottom: 12px; }
-        .done-title {
-          font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 300;
-          color: var(--text-dark); margin-bottom: 8px;
-        }
-        .done-sub { font-size: 13px; color: var(--text-mid); margin-bottom: 8px; line-height: 1.7; }
         .done-fail { font-size: 12px; color: var(--rose); margin-bottom: 16px; }
         .confirm-btn {
           width: 100%; padding: 13px;
@@ -232,8 +261,21 @@ export default function Home() {
           border: none; border-radius: 2px;
           font-family: 'Noto Serif KR', serif; font-size: 14px;
           cursor: pointer; letter-spacing: 1px; transition: background 0.2s;
+          animation: fadeUp 0.5s ease 0.55s both;
         }
         .confirm-btn:hover { background: #b56a5c; }
+        .email-guide {
+          margin-top: 14px; text-align: center;
+          font-size: 11px; color: var(--text-light); line-height: 1.8;
+        }
+        .email-link {
+          display: inline-block; margin-top: 2px;
+          font-family: 'Cardo', serif; font-size: 12px; font-style: italic;
+          color: var(--rose); text-decoration: none; letter-spacing: 0.5px;
+          border-bottom: 1px solid var(--rose-pale);
+          transition: border-color 0.2s;
+        }
+        .email-link:hover { border-color: var(--rose); }
       `}</style>
 
       <div className="page">
@@ -246,6 +288,7 @@ export default function Home() {
 
         {uploadState !== "idle" && (
           <div className="overlay">
+
             <div className="modal-card">
               {uploadState === "uploading" ? (
                 <>
@@ -254,7 +297,12 @@ export default function Home() {
                   <div className="progress-bar-wrap">
                     <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
                   </div>
-                  <div className="progress-text">{progress.done} / {progress.total}장</div>
+                  <div className="progress-text">
+                    {progress.compressing < progress.total
+                      ? `압축 중... (${progress.compressing} / ${progress.total}장)`
+                      : `${progress.done} / ${progress.total}장`
+                    }
+                  </div>
                   <div className="progress-warn">
                     ⚠️ 전송이 완료될 때까지<br />화면을 닫지 말아주세요
                   </div>
@@ -263,7 +311,7 @@ export default function Home() {
                 <>
                   <div className="done-icon">💌</div>
                   <div className="done-title">전송 완료</div>
-                  <div className="done-sub">소중한 순간을 나눠주셔서<br />감사합니다</div>
+                  <div className="done-sub">소중한 순간을 나눠주셔서<br />감사합니다 ♥</div>
                   {progress.failed > 0 && (
                     <div className="done-fail">
                       {progress.failed}장은 전송에 실패했어요. 다시 시도해주세요.
@@ -303,6 +351,12 @@ export default function Home() {
               style={{ display: "none" }}
             />
           </label>
+          <p className="email-guide">
+            고화질 원본 사진은 아래 이메일로 보내주시면 감사합니다 🙏<br />
+            <a href="mailto:hellotoyou07@gmail.com" className="email-link">
+              hellotoyou07@gmail.com
+            </a>
+          </p>
         </div>
       </div>
     </>
